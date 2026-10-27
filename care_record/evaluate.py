@@ -66,6 +66,7 @@ def evaluate(cases: list[dict], llm: LLM, input_mode: str = "text", audio_dir: P
             "correct": crit.correct,
             "wrong_value": crit.wrong_value,
             "hallucinated": crit.hallucinated,
+            "misplaced": crit.misplaced,
             "missed": crit.missed,
             "hallucinated_paths": ";".join(score.hallucinated_paths),
             "hallucinations_flagged": score.hallucinations_flagged,
@@ -79,7 +80,7 @@ def evaluate(cases: list[dict], llm: LLM, input_mode: str = "text", audio_dir: P
         records.append({"id": case["id"], "record": record.model_dump(mode="json")})
         print(f"[{i}/{len(cases)}] {case['id']} {case['category']:<20} status={record.status:<12} "
               f"correct={crit.correct} wrong={crit.wrong_value} halluc={crit.hallucinated} "
-              f"missed={crit.missed} {total_latency:.1f}s")
+              f"misplaced={crit.misplaced} missed={crit.missed} {total_latency:.1f}s")
 
     summary = summarize(scores, rows, llm.model, input_mode, run_name)
 
@@ -126,8 +127,10 @@ def summarize(scores: list[CaseScore], rows: list[dict], model: str, input_mode:
         "notes_with_hallucination": _r(sum(sc.critical().hallucinated > 0 for sc in scores) / n),
         "hallucinations_caught_by_flags": _r(sum(sc.hallucinations_flagged for sc in scores) / halluc_total
                                              if halluc_total else None),
+        "misplaced_rate": _r(crit.misplaced / crit.n_pred if crit.n_pred else None),
         "wrong_values": crit.wrong_value,
         "hallucinations": crit.hallucinated,
+        "misplaced": crit.misplaced,
         "missed": crit.missed,
         "safety_error_score": _r(safety_error_score(crit)),
         "review_recall": _r(sum(sc.expected_review_flagged for sc in scores) / expected if expected else None),
@@ -144,11 +147,17 @@ def summarize(scores: list[CaseScore], rows: list[dict], model: str, input_mode:
 
 
 def append_summary(summary: dict, path: Path | None = None) -> None:
+    """Add one run to the summary CSV. The file is rewritten so that runs from before a new
+    metric was added keep their values in the right columns (missing ones stay empty)."""
     path = path or SUMMARY_CSV
     path.parent.mkdir(parents=True, exist_ok=True)
-    new = not path.exists()
-    with path.open("a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(summary))
-        if new:
-            writer.writeheader()
-        writer.writerow(summary)
+    rows, fieldnames = [], list(summary)
+    if path.exists():
+        with path.open(newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            fieldnames += [name for name in reader.fieldnames or [] if name not in summary]
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, restval="")
+        writer.writeheader()
+        writer.writerows(rows + [summary])

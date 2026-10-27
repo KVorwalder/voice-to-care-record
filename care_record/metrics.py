@@ -1,8 +1,10 @@
 """Field-level scoring of an extracted note against ground truth.
 
 Items are matched per section by entity (vital kind, drug name, incident type, SIS area).
-A matched pair is then either correct or a *wrong value*. Unmatched predictions are
-*hallucinations* (an entry the note does not support), unmatched truth items are *missed*.
+A matched pair is then either correct or a *wrong value*. Unmatched truth items are *missed*.
+An unmatched prediction is *misplaced* if its quote is the evidence of a truth item in another
+section (a real statement filed in the wrong place, e.g. "Luftnot" as an incident instead of
+an observation), otherwise a *hallucination* (an entry the note does not support).
 
     precision = correct / predicted      recall = correct / truth
 
@@ -18,12 +20,16 @@ import re
 from dataclasses import dataclass, field
 
 from .synth import MED_ALIASES
+from .validation import normalize
 
 CRITICAL_SECTIONS = ("vital_signs", "medications", "incidents")
 ALL_SECTIONS = ("observations",) + CRITICAL_SECTIONS
 
 # Weights for the safety-weighted error score.
-WEIGHT_HALLUCINATION, WEIGHT_WRONG_VALUE, WEIGHT_MISSED = 3, 2, 1
+WEIGHT_HALLUCINATION, WEIGHT_WRONG_VALUE, WEIGHT_MISSED, WEIGHT_MISPLACED = 3, 2, 1, 1
+
+# Shorter quotes ("ja", "x") would match almost any evidence by containment.
+MIN_QUOTE_CHARS = 5
 
 _ALIASES = {re.sub(r"[^a-z]", "", k.lower()): v for k, v in MED_ALIASES.items()}
 
@@ -65,11 +71,27 @@ def value_matches(section: str, pred: dict, truth: dict) -> bool:
     return True  # observations: area match is the whole check
 
 
+def evidence_in_other_section(item: dict, section: str, truth: dict) -> bool:
+    """True if the item's quote overlaps the evidence of a truth item in another section.
+    Containment works both ways, since a model often copies a filler word ("Und ...") along."""
+    ev = normalize(item.get("evidence", ""))
+    for other in ALL_SECTIONS:
+        if other == section:
+            continue
+        for t in truth.get(other, []):
+            t_ev = normalize(t["evidence"])
+            shorter = min(ev, t_ev, key=len)
+            if len(shorter) >= MIN_QUOTE_CHARS and (t_ev in ev or ev in t_ev):
+                return True
+    return False
+
+
 @dataclass
 class SectionCounts:
     correct: int = 0
     wrong_value: int = 0
     hallucinated: int = 0
+    misplaced: int = 0
     missed: int = 0
     n_pred: int = 0
     n_truth: int = 0
@@ -146,6 +168,9 @@ def score_case(pred: dict, truth: dict, expect_review: list[str], flagged_paths:
                 counts.wrong_value += 1
 
         for p_idx in sorted(unused):
+            if evidence_in_other_section(preds[p_idx], section, truth):
+                counts.misplaced += 1
+                continue
             counts.hallucinated += 1
             path = f"{section}[{p_idx}]"
             if section in CRITICAL_SECTIONS:
@@ -161,5 +186,5 @@ def safety_error_score(counts: SectionCounts) -> float | None:
     if not counts.n_truth:
         return None
     weighted = (WEIGHT_HALLUCINATION * counts.hallucinated + WEIGHT_WRONG_VALUE * counts.wrong_value
-                + WEIGHT_MISSED * counts.missed)
+                + WEIGHT_MISSED * counts.missed + WEIGHT_MISPLACED * counts.misplaced)
     return weighted / counts.n_truth

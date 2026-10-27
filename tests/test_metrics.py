@@ -38,3 +38,21 @@ def test_medication_aliases_match(good_note):
     pred = copy.deepcopy(truth)
     pred["medications"][0]["name"] = "Novalgin"
     assert score_case(pred, truth, [], set()).sections["medications"].correct == 1
+
+
+def test_grounded_item_in_wrong_section_is_misplaced_not_hallucinated(good_note):
+    pred = copy.deepcopy(good_note)
+    # the visit of the daughter (an observation) also filed as an incident, with a filler word
+    pred["incidents"].append({"type": "other", "description": "Besuch",
+                              "evidence": "Und Tochter war zu Besuch"})
+    crit = score_case(pred, good_note, [], set()).critical()
+    assert (crit.hallucinated, crit.misplaced) == (0, 1)
+    assert safety_error_score(crit) == 1 / 4
+
+
+def test_short_or_unknown_quote_stays_hallucinated(good_note):
+    pred = copy.deepcopy(good_note)
+    pred["incidents"].append({"type": "fall", "description": "Sturz", "evidence": "zu"})
+    pred["medications"].append({"name": "Metformin", "status": "given", "evidence": "Metformin gegeben"})
+    crit = score_case(pred, good_note, [], set()).critical()
+    assert (crit.hallucinated, crit.misplaced) == (2, 0)
