@@ -15,6 +15,7 @@ import json
 import random
 from pathlib import Path
 
+from .numbers_de import de_words
 from .schema import ExtractedNote
 
 PATIENTS = [
@@ -26,29 +27,6 @@ SHIFTS = ["Frühdienst", "Spätdienst", "Nachtdienst"]
 FILLERS = ["Ähm, ", "Also, ", "Dann noch, ", "Ach ja, ", "Joa, ", "Und ", "Äh, ", ""]
 CLOSERS = ["Das war's.", "Ja, das wär's von mir.", "Sonst nichts Besonderes.", "Okay, Ende.", ""]
 
-# ---------------------------------------------------------------- numbers in German words
-
-_ONES = ["null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun",
-         "zehn", "elf", "zwölf", "dreizehn", "vierzehn", "fünfzehn", "sechzehn", "siebzehn",
-         "achtzehn", "neunzehn"]
-_TENS = {2: "zwanzig", 3: "dreißig", 4: "vierzig", 5: "fünfzig", 6: "sechzig", 7: "siebzig",
-         8: "achtzig", 9: "neunzig"}
-
-
-def de_words(n: int) -> str:
-    """Integer 0..999 as German words, e.g. 132 -> 'hundertzweiunddreißig'."""
-    if n < 20:
-        return _ONES[n]
-    if n < 100:
-        tens, ones = divmod(n, 10)
-        if ones == 0:
-            return _TENS[tens]
-        return ("ein" if ones == 1 else _ONES[ones]) + "und" + _TENS[tens]
-    hundreds, rest = divmod(n, 100)
-    head = "hundert" if hundreds == 1 else _ONES[hundreds] + "hundert"
-    return head + (de_words(rest) if rest else "")
-
-
 def say_int(n: int, words: bool) -> str:
     return de_words(n) if words else str(n)
 
@@ -57,7 +35,7 @@ def say_decimal(x: float, words: bool) -> str:
     """38.5 -> '38,5' or 'achtunddreißig komma fünf'."""
     whole, frac = divmod(round(x * 10), 10)
     if words:
-        return de_words(whole) + (f" komma {_ONES[frac]}" if frac else "")
+        return de_words(whole) + (f" komma {de_words(frac)}" if frac else "")
     return f"{whole},{frac}" if frac else str(whole)
 
 
