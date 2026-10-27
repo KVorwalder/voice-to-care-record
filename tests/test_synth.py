@@ -1,6 +1,6 @@
 from care_record.numbers_de import de_words, numbers_in
 from care_record.schema import ExtractedNote
-from care_record.synth import CATEGORY_COUNTS, generate_dataset
+from care_record.synth import CATEGORY_COUNTS, TABLET_MEDS, generate_dataset
 
 
 def test_de_words():
@@ -33,3 +33,11 @@ def test_nothing_noteworthy_has_empty_truth():
     for case in generate_dataset():
         if case["category"] == "nothing_noteworthy":
             assert not any(case["truth"][s] for s in ("observations", "vital_signs", "medications", "incidents"))
+
+
+def test_contradiction_tablet_phrase_uses_only_tablets():
+    tablets = {m[0] for m in TABLET_MEDS}
+    for seed in (42, 1042):
+        for case in generate_dataset(seed):
+            if case["category"] == "contradiction":
+                assert case["truth"]["medications"][0]["name"] in tablets

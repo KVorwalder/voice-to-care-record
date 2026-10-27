@@ -54,7 +54,7 @@ def vital(rng: random.Random, kind: str, words: bool, value=None, diastolic=None
         return {"kind": kind, "value": s, "diastolic": d}, phrase
     if kind == "pulse":
         v = value or rng.randint(58, 98)
-        phrase = rng.choice(["Puls {v}", "Puls lag bei {v}", "Herzfrequenz {v}", "Puls war so {v}"])
+        phrase = rng.choice(["Puls {v}", "Puls lag bei {v}", "Herzfrequenz {v}", "Puls war {v}"])
         return {"kind": kind, "value": v}, phrase.format(v=say_int(v, words))
     if kind == "temperature":
         v = value or rng.choice([36.4, 36.6, 36.8, 37.1, 37.4, 37.9, 38.2, 38.5])
@@ -95,6 +95,8 @@ MEDS = [
     ("Insulin", "8 IE", ["acht Einheiten Insulin", "Insulin 8 IE"], "Insulin"),
     ("Macrogol", "1 Beutel", ["einen Beutel Macrogol", "Macrogol ein Beutel"], "Macrogol"),
 ]
+# Oral tablets only: used where the phrase mentions "die Tablette".
+TABLET_MEDS = [m for m in MEDS if m[0] not in ("Insulin", "Macrogol")]
 # Spoken brand names that map to a canonical name in the truth.
 MED_ALIASES = {"Novalgin": "Novaminsulfon", "Panto": "Pantoprazol", "Simva": "Simvastatin"}
 
@@ -312,7 +314,7 @@ def make_case(rng: random.Random, case_id: str, category: str) -> dict:
 
     elif category == "contradiction":
         # Two statements that conflict -> one item, flagged for review.
-        name = rng.choice(MEDS)[0]
+        name = rng.choice(TABLET_MEDS)[0]
         b.add("medications", {"name": name, "dose": None, "status": "given"},
               f"{name} hab ich gegeben, also, die Tablette lag später aber noch auf dem Nachttisch",
               review=True)
