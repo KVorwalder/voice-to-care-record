@@ -48,9 +48,18 @@ do NOT create a vital sign for it.
 - If the speaker corrects themselves ("72, nee, 76"), use the corrected value.
 - Set `uncertain: true` if the statement is hedged ("so um die", "glaub ich"), contradicts \
 itself, or the value seems physiologically impossible. Still extract the item.
+- Contradictions: if the note first states one thing and then adds a detail that puts it in \
+doubt (a fall is denied but a hint follows that it happened; a drug is reported as given but \
+later found untaken), extract the item with `uncertain: true`. A possible fall is a `fall` \
+incident. A human must check it; never resolve the contradiction yourself.
 - Medication status: "given" if administered/taken, "refused" if refused, spat out or not taken.
-- Falls, pain, wounds and other events go into `incidents`, not `observations`. Pain without \
-a stated score has pain_score null.
+- Each statement goes into exactly one section. Do not file the same quote twice.
+- `incidents` are: falls (also found on the floor), pain, wounds and skin damage (pressure \
+ulcer/Dekubitus, skin tear, reddened skin, bruise), and acute events (`other`, e.g. vomiting, \
+restless night). A wound that is being treated is still a `wound` incident. Pain without a \
+stated score has pain_score null.
+- Ongoing symptoms (shortness of breath, oedema), needing help with transfers or walking, \
+eating, washing and social activities are `observations`, not incidents.
 - Use canonical drug names where the spoken name is a known brand or short form \
 (Novalgin -> Novaminsulfon, Panto -> Pantoprazol, Simva -> Simvastatin).
 - `summary`: two or three neutral German sentences. Empty lists are fine if nothing applies."""
