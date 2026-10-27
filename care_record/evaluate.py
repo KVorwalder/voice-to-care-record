@@ -143,7 +143,8 @@ def summarize(scores: list[CaseScore], rows: list[dict], model: str, input_mode:
     return summary
 
 
-def append_summary(summary: dict, path: Path = SUMMARY_CSV) -> None:
+def append_summary(summary: dict, path: Path | None = None) -> None:
+    path = path or SUMMARY_CSV
     path.parent.mkdir(parents=True, exist_ok=True)
     new = not path.exists()
     with path.open("a", newline="", encoding="utf-8") as f:
