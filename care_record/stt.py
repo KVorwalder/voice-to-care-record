@@ -25,11 +25,16 @@ def _load(model_size: str):
     Input:  model_size - Whisper model name, e.g. "large-v3-turbo"
     Output: a faster_whisper.WhisperModel, on the GPU if possible, otherwise on the CPU
     """
+    import numpy as np
     from faster_whisper import WhisperModel
 
     try:
-        return WhisperModel(model_size, device="cuda", compute_type="float16")
-    except Exception:  # no CUDA available -> CPU
+        model = WhisperModel(model_size, device="cuda", compute_type="float16")
+        # Loading also works without the CUDA libraries (cuBLAS, cuDNN); only inference fails.
+        # So transcribe one second of silence to find out whether the GPU really works.
+        list(model.transcribe(np.zeros(16000, dtype=np.float32), language="de")[0])
+        return model
+    except Exception:  # no usable CUDA -> CPU
         return WhisperModel(model_size, device="cpu", compute_type="int8")
 
 

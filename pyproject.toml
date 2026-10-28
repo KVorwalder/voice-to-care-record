@@ -10,8 +10,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-stt = ["faster-whisper>=1.0"]
-ui = ["streamlit>=1.35"]
+stt = ["faster-whisper>=1.0", "av<19"]  # av 19 removed an argument faster-whisper 1.2 still passes
+ui = ["streamlit>=1.40"]  # st.audio_input
 dev = ["pytest>=8"]
 
 [project.scripts]

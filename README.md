@@ -54,7 +54,11 @@ care process note.wav                                 # audio: local Whisper fir
 care evaluate data/synthetic/cases.jsonl              # writes results/runs/<run>/ and results/summary.csv
 care evaluate data/synthetic/cases_test.jsonl --limit 10
 pytest
+streamlit run app.py                                  # live test: dictate a note with the microphone
 ```
+
+Whisper runs on the GPU if the CUDA libraries (cuBLAS, cuDNN) are installed, otherwise on the CPU
+(about 4 s for a 25 s note with `large-v3-turbo`).
 
 Models are plain litellm strings, so an API model works too: `--model anthropic/claude-haiku-5-5`
 (needs the provider key, e.g. `ANTHROPIC_API_KEY`). Defaults can be set with `CARE_MODEL` and
