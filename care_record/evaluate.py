@@ -14,20 +14,32 @@ from .metrics import (ALL_SECTIONS, CRITICAL_SECTIONS, CaseScore, SectionCounts,
 from .pipeline import process_transcript
 from .schema import CareRecord
 
+# One row per evaluation run; this file is committed so results stay comparable over time
 SUMMARY_CSV = Path("results/summary.csv")
 
 
 def _r(x: float | None, nd: int = 3):
+    """Round a number for the reports; keep None as None."""
     return None if x is None else round(x, nd)
 
 
 def evaluate(cases: list[dict], llm: LLM, dataset: str = "", out_root: Path = Path("results/runs")) -> dict:
+    """Run the pipeline on every labelled case, score it and write the results.
+
+    Input:  cases    - list of {"id", "category", "transcript", "truth", "expect_review"}
+            llm      - the model to evaluate
+            dataset  - dataset name for the summary row, e.g. "cases_test"
+            out_root - folder for the detailed per-run output
+    Output: summary dict (also written to <run>/summary.json and appended to summary.csv)
+    """
+    # Every run gets its own folder, e.g. results/runs/20261028-101500_ollama_chat_gemma3_12b
     run_name = f"{datetime.now():%Y%m%d-%H%M%S}_{llm.model.replace('/', '_').replace(':', '_')}"
     out_dir = out_root / run_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     rows, scores, records = [], [], []
     for i, case in enumerate(cases, 1):
+        # 1. Run the pipeline on the case transcript
         start = time.perf_counter()
         try:
             record = process_transcript(case["transcript"], llm)
@@ -38,10 +50,13 @@ def evaluate(cases: list[dict], llm: LLM, dataset: str = "", out_root: Path = Pa
             traceback.print_exc()
         latency = time.perf_counter() - start
 
+        # 2. Compare the result with the ground truth
         flagged = {f.path for f in record.review_flags}
         score = score_case(record.note.model_dump(mode="json"), case["truth"], case["expect_review"], flagged)
         scores.append(score)
         crit = score.critical()
+
+        # 3. Keep one row per case for per_case.csv, and the full record for debugging
         rows.append({
             "id": case["id"],
             "category": case["category"],
@@ -63,8 +78,10 @@ def evaluate(cases: list[dict], llm: LLM, dataset: str = "", out_root: Path = Pa
               f"correct={crit.correct} wrong={crit.wrong_value} halluc={crit.hallucinated} "
               f"misplaced={crit.misplaced} missed={crit.missed} {latency:.1f}s")
 
+    # 4. Aggregate over all cases
     summary = summarize(scores, rows, llm.model, dataset, run_name)
 
+    # 5. Write the outputs: per-case table, full records, summary
     with (out_dir / "per_case.csv").open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0]))
         writer.writeheader()
@@ -79,6 +96,14 @@ def evaluate(cases: list[dict], llm: LLM, dataset: str = "", out_root: Path = Pa
 
 
 def summarize(scores: list[CaseScore], rows: list[dict], model: str, dataset: str, run_name: str) -> dict:
+    """Aggregate the per-case scores of one run into the headline metrics.
+
+    Input:  scores   - CaseScore per case
+            rows     - per-case rows (for schema validity and latency)
+            model, dataset, run_name - copied into the summary for identification
+    Output: dict with one value per metric (one row of summary.csv)
+    """
+    # Sum the counts per section over all cases, and over the critical sections together
     sections = {s: SectionCounts() for s in ALL_SECTIONS}
     for sc in scores:
         for s in ALL_SECTIONS:
@@ -94,8 +119,10 @@ def summarize(scores: list[CaseScore], rows: list[dict], model: str, dataset: st
         "model": model,
         "dataset": dataset,
         "n_cases": n,
+        # Share of notes whose first / any answer was fully schema-valid
         "schema_valid_first_try": _r(sum(bool(r["valid_first_try"]) for r in rows) / n),
         "schema_valid_after_retry": _r(sum(bool(r["valid_after_retry"]) for r in rows) / n),
+        # Quality on the critical sections (vital signs, medications, incidents)
         "precision": _r(crit.precision),
         "recall": _r(crit.recall),
         "f1": _r(crit.f1),
@@ -105,16 +132,23 @@ def summarize(scores: list[CaseScore], rows: list[dict], model: str, dataset: st
         "wrong_values": crit.wrong_value,
         "missed": crit.missed,
         "safety_error_score": _r(safety_error_score(crit)),
+        # Share of must-review items that were found and flagged
         "review_recall": _r(sum(sc.expected_review_flagged for sc in scores) / expected if expected else None),
         "latency_mean_s": _r(statistics.mean(r["latency_s"] for r in rows), 2),
     }
+    # F1 per section, to see where the errors are (e.g. incidents vs. medications)
     for s in ALL_SECTIONS:
         summary[f"{s}_f1"] = _r(sections[s].f1)
     return summary
 
 
 def append_summary(summary: dict, path: Path | None = None) -> None:
-    """Append one run as a row to the summary CSV (one row per run, fixed columns)."""
+    """Append one run as a row to the summary CSV (one row per run, fixed columns).
+
+    Input:  summary - the dict from summarize()
+            path    - CSV file; defaults to results/summary.csv
+    Output: none (writes the file; adds the header if the file is new)
+    """
     path = path or SUMMARY_CSV
     path.parent.mkdir(parents=True, exist_ok=True)
     new = not path.exists()

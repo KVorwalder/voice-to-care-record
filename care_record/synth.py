@@ -27,12 +27,23 @@ SHIFTS = ["Frühdienst", "Spätdienst", "Nachtdienst"]
 FILLERS = ["Ähm, ", "Also, ", "Dann noch, ", "Ach ja, ", "Joa, ", "Und ", "Äh, ", ""]
 CLOSERS = ["Das war's.", "Ja, das wär's von mir.", "Sonst nichts Besonderes.", "Okay, Ende.", ""]
 
+
 def say_int(n: int, words: bool) -> str:
+    """Say an integer the way a caregiver might dictate it.
+
+    Input:  n, words (True = as German words)
+    Output: e.g. "130" or "hundertdreißig"
+    """
     return de_words(n) if words else str(n)
 
 
 def say_decimal(x: float, words: bool) -> str:
-    """38.5 -> '38,5' or 'achtunddreißig komma fünf'."""
+    """Say a number with one decimal, German style.
+
+    Input:  x, words (True = as German words)
+    Output: 38.5 -> '38,5' or 'achtunddreißig komma fünf'; 38.0 -> '38'
+    """
+    # Split into whole part and first decimal digit (38.5 -> 38, 5)
     whole, frac = divmod(round(x * 10), 10)
     if words:
         return de_words(whole) + (f" komma {de_words(frac)}" if frac else "")
@@ -44,6 +55,13 @@ def say_decimal(x: float, words: bool) -> str:
 
 
 def vital(rng: random.Random, kind: str, words: bool, value=None, diastolic=None):
+    """Create one vital sign: a random realistic value and a spoken phrase for it.
+
+    Input:  rng (seeded random generator), kind (e.g. "pulse"), words (numbers as words?),
+            value/diastolic (optional fixed values instead of random ones)
+    Output: (truth item dict, spoken phrase), e.g. ({"kind": "pulse", "value": 72}, "Puls lag bei 72")
+    """
+    # Each kind: pick a value in a normal range, then one of several ways to say it
     if kind == "blood_pressure":
         s = value or rng.randrange(105, 170, 5)
         d = diastolic or rng.randrange(60, 95, 5)
@@ -102,11 +120,19 @@ MED_ALIASES = {"Novalgin": "Novaminsulfon", "Panto": "Pantoprazol", "Simva": "Si
 
 
 def medication(rng: random.Random, status: str, med=None):
+    """Create one medication entry and a spoken phrase for it.
+
+    Input:  rng, status ("given" or "refused"), med (optional fixed entry from MEDS)
+    Output: (truth item dict, spoken phrase), e.g.
+            ({"name": "Ramipril", "dose": "5 mg", "status": "given"}, "Ramipril 5 mg gegeben")
+    """
     name, dose, with_dose, without_dose = med or rng.choice(MEDS)
+    # 70 % of the time the dose is spoken; otherwise it is not, so the truth has no dose either
     if rng.random() < 0.7:
         spoken = rng.choice(with_dose)
     else:
         spoken, dose = without_dose, None
+    # Wrap the drug in a sentence that says whether it was given or refused
     if status == "given":
         phrase = rng.choice(["{m} gegeben", "{m} hat sie genommen", "hat {m} ohne Probleme genommen",
                              "{m} verabreicht"])
@@ -143,8 +169,14 @@ INCIDENTS = {
 
 
 def incident(rng: random.Random, kind: str, words: bool):
+    """Create one incident and a spoken phrase for it.
+
+    Input:  rng, kind ("fall", "pain", "wound", "other"), words (pain score as words?)
+    Output: (truth item dict, spoken phrase)
+    """
     description, phrase = rng.choice(INCIDENTS[kind])
     item = {"type": kind, "description": description, "pain_score": None}
+    # Pain sometimes comes with a score on the 0-10 scale, which then must be extracted too
     if kind == "pain" and rng.random() < 0.7:
         score = rng.randint(2, 8)
         phrase += rng.choice([", Schmerzskala {s}", ", auf der Skala so {s} von zehn", ", NRS {s}"]).format(
@@ -190,6 +222,11 @@ OBSERVATIONS = {
 
 
 def observation(rng: random.Random, area: str | None = None):
+    """Create one observation for an SIS area and a spoken phrase for it.
+
+    Input:  rng, area (optional; random if None)
+    Output: (truth item dict, spoken phrase)
+    """
     area = area or rng.choice(list(OBSERVATIONS))
     text, phrase = rng.choice(OBSERVATIONS[area])
     return {"area": area, "text": text}, phrase
@@ -199,20 +236,39 @@ def observation(rng: random.Random, area: str | None = None):
 
 
 class CaseBuilder:
-    """Collects (section, truth_item, phrase) and assembles transcript + truth."""
+    """Collects (section, truth_item, phrase) and assembles transcript + truth.
+
+    Usage: add() every fact of a case, then build() returns the finished case.
+    """
 
     def __init__(self, rng: random.Random, case_id: str, category: str):
+        """Input: rng (seeded random generator), case_id (e.g. "case_001"), category name."""
         self.rng, self.case_id, self.category = rng, case_id, category
         self.parts: list[tuple[str | None, dict | None, str, bool]] = []  # (section, item, phrase, review)
 
     def add(self, section: str | None, item: dict | None, phrase: str, review: bool = False):
+        """Add one spoken phrase to the case.
+
+        Input:  section - where the item belongs in the truth, or None for a phrase that
+                          must NOT produce an item (e.g. "Blutdruck gemessen, trag ich nach")
+                item    - truth item dict (None if section is None)
+                phrase  - what the caregiver says
+                review  - True if a careful system must flag this item for human review
+        Output: none
+        """
         self.parts.append((section, item, phrase, review))
 
     def build(self, shuffle: bool = True) -> dict:
+        """Assemble the transcript and the matching ground truth.
+
+        Input:  shuffle - put the phrases in random order (like real, unordered dictation)
+        Output: {"id", "category", "transcript", "truth", "expect_review"}
+        """
         rng = self.rng
         parts = self.parts[:]
         if shuffle:
             rng.shuffle(parts)
+        # Opening sentence with a (fictional) resident name
         patient = rng.choice(PATIENTS)
         opener = rng.choice([
             f"So, {patient}, {rng.choice(SHIFTS)}.",
@@ -223,10 +279,12 @@ class CaseBuilder:
         truth = {"observations": [], "vital_signs": [], "medications": [], "incidents": []}
         expect_review = []
         for section, item, phrase, review in parts:
+            # Spoken style: a random filler word in front ("Ähm, ", "Also, ", ...)
             filler = rng.choice(FILLERS)
             shown = phrase if filler else phrase[0].upper() + phrase[1:]
             sentences.append(f"{filler}{shown}.")
             if section is not None:
+                # The phrase is in the transcript word for word, so it is also the true evidence
                 truth[section].append({**item, "evidence": shown, "uncertain": review})
                 if review:
                     expect_review.append(f"{section}[{len(truth[section]) - 1}]")
@@ -250,7 +308,15 @@ VITAL_KINDS = ["blood_pressure", "pulse", "temperature", "oxygen_saturation", "b
 
 def _standard_content(b: CaseBuilder, words: bool | None = None, n_vitals=(1, 3), n_meds=(0, 2),
                       n_incidents=(0, 1), n_obs=(1, 3)):
+    """Add a random mix of ordinary facts to a case.
+
+    Input:  b - the CaseBuilder to add to
+            words - numbers as words (True), as digits (False), or mixed 30/70 (None)
+            n_* - (min, max) number of vital signs, medications, incidents and observations
+    Output: none (adds phrases to b)
+    """
     rng = b.rng
+    # w() decides per number whether it is spoken as words
     w = (lambda: rng.random() < 0.3) if words is None else (lambda: words)
     for kind in rng.sample(VITAL_KINDS[:5], rng.randint(*n_vitals)):
         b.add("vital_signs", *vital(rng, kind, w()))
@@ -263,6 +329,11 @@ def _standard_content(b: CaseBuilder, words: bool | None = None, n_vitals=(1, 3)
 
 
 def make_case(rng: random.Random, case_id: str, category: str) -> dict:
+    """Create one case of a given category; each category tests one kind of difficulty.
+
+    Input:  rng, case_id, category (a key of CATEGORY_COUNTS)
+    Output: finished case dict (see CaseBuilder.build)
+    """
     b = CaseBuilder(rng, case_id, category)
 
     if category == "standard":
@@ -352,6 +423,11 @@ CATEGORY_COUNTS = {
 
 
 def generate_dataset(seed: int = 42) -> list[dict]:
+    """Create the full synthetic dataset.
+
+    Input:  seed - same seed, same dataset (42 = dev set, 1042 = test set)
+    Output: list of cases, CATEGORY_COUNTS[category] cases per category
+    """
     rng = random.Random(seed)
     cases, n = [], 0
     for category, count in CATEGORY_COUNTS.items():
@@ -362,6 +438,7 @@ def generate_dataset(seed: int = 42) -> list[dict]:
 
 
 def write_jsonl(cases: list[dict], path: Path) -> None:
+    """Write cases as JSON lines (one case per line). Input: cases, path. Output: none."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
         for case in cases:
@@ -369,5 +446,6 @@ def write_jsonl(cases: list[dict], path: Path) -> None:
 
 
 def read_jsonl(path: Path) -> list[dict]:
+    """Read a JSON lines file. Input: path. Output: list of dicts (empty lines are skipped)."""
     with Path(path).open(encoding="utf-8") as f:
         return [json.loads(line) for line in f if line.strip()]

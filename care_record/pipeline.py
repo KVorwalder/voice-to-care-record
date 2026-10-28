@@ -7,10 +7,18 @@ from .llm import LLM
 from .schema import CareRecord, ExtractedNote, ReviewFlag
 from .validation import review
 
+# File endings that are treated as audio and sent through speech-to-text first
 AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm"}
 
 
 def process_transcript(transcript: str, llm: LLM) -> CareRecord:
+    """Turn a transcript into a final care record with review flags.
+
+    Input:  transcript - the dictated note as text
+            llm        - the model to use for extraction
+    Output: CareRecord with status "ok", "needs_review" or "failed"
+    """
+    # 1. Extraction: LLM call(s) with validation, retry and salvage
     result = extract(transcript, llm)
     meta = {
         "model": llm.model,
@@ -21,6 +29,7 @@ def process_transcript(transcript: str, llm: LLM) -> CareRecord:
         "latency_s": round(result.latency_s, 3),
     }
 
+    # 2a. Nothing usable came back: return an empty record that tells a human to document manually
     if result.note is None:
         return CareRecord(
             transcript=transcript,
@@ -31,9 +40,12 @@ def process_transcript(transcript: str, llm: LLM) -> CareRecord:
             meta=meta,
         )
 
+    # 2b. Items that salvage() had to drop are reported, so nobody assumes they were not said
     flags = [ReviewFlag(path=path, reason="invalid", detail=f"item dropped: {error}")
              for path, error in result.dropped]
+    # 3. Validation checks: grounding, number-in-quote, plausibility, uncertainty
     flags += review(result.note, transcript)
+    # 4. Any flag means a human has to look at the record
     return CareRecord(
         transcript=transcript,
         note=result.note,
@@ -44,8 +56,15 @@ def process_transcript(transcript: str, llm: LLM) -> CareRecord:
 
 
 def process_file(path: Path, llm: LLM) -> CareRecord:
+    """Process a note stored in a file: audio is transcribed first, text is used directly.
+
+    Input:  path - audio file (.wav, .mp3, ...) or UTF-8 text file
+            llm  - the model to use for extraction
+    Output: CareRecord (for audio, meta also contains the speech-to-text duration)
+    """
     path = Path(path)
     if path.suffix.lower() in AUDIO_SUFFIXES:
+        # Imported only when needed: faster-whisper is an optional, heavy dependency
         from .stt import transcribe
 
         stt = transcribe(path)
