@@ -129,11 +129,6 @@ class ExtractionResult:
     def latency_s(self) -> float:
         return sum(r.latency_s for r in self.responses)
 
-    @property
-    def cost_usd(self) -> float | None:
-        costs = [r.cost_usd for r in self.responses]
-        return None if any(c is None for c in costs) else sum(costs)
-
 
 def extract(transcript: str, llm: LLM, max_attempts: int = 2) -> ExtractionResult:
     messages = build_messages(transcript)

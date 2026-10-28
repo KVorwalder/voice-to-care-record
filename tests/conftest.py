@@ -19,7 +19,7 @@ class FakeLLM:
         text = self.responses.pop(0)
         if not isinstance(text, str):
             text = json.dumps(text, ensure_ascii=False)
-        return LLMResponse(text=text, latency_s=0.01, cost_usd=0.001)
+        return LLMResponse(text=text, latency_s=0.01)
 
 
 class OracleLLM:
@@ -33,7 +33,7 @@ class OracleLLM:
     def complete(self, messages):
         transcript = messages[-1]["content"].removeprefix("Transcript:\n")
         return LLMResponse(text=json.dumps(self.by_transcript[transcript], ensure_ascii=False),
-                           latency_s=0.0, cost_usd=0.0)
+                           latency_s=0.0)
 
 
 TRANSCRIPT = ("So, Frau Berger, Frühdienst. Ähm, Blutdruck 130 zu 80. Puls lag bei 72. "

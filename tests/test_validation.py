@@ -1,21 +1,19 @@
 from care_record.pipeline import process_transcript
 from care_record.schema import ExtractedNote, VitalSign
-from care_record.validation import check_plausibility, grounding_score, review, value_in_evidence
+from care_record.validation import check_plausibility, is_grounded, review, value_in_evidence
 
 from .conftest import FakeLLM
 
 
-def test_grounding_exact_ignores_case_and_punctuation(transcript):
-    assert grounding_score("blutdruck 130 zu 80", transcript) == 1.0
+def test_grounding_ignores_case_and_punctuation(transcript):
+    assert is_grounded("blutdruck 130 zu 80", transcript)
+    assert is_grounded("Puls lag bei 72.", transcript)
 
 
-def test_grounding_tolerates_small_differences(transcript):
-    assert grounding_score("Puls lag bei 72.", transcript) == 1.0
-    assert grounding_score("Puls lag so bei 72", transcript) > 0.85
-
-
-def test_grounding_rejects_invented_quote(transcript):
-    assert grounding_score("Metformin 500 gegeben", transcript) < 0.85
+def test_grounding_rejects_paraphrased_or_invented_quote(transcript):
+    assert not is_grounded("Puls lag so bei 72", transcript)
+    assert not is_grounded("Metformin 500 gegeben", transcript)
+    assert not is_grounded("", transcript)
 
 
 def test_value_must_appear_in_evidence():

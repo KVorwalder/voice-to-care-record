@@ -19,7 +19,6 @@ def process_transcript(transcript: str, llm: LLM) -> CareRecord:
         "valid_after_retry": result.valid,
         "errors": result.errors,
         "latency_s": round(result.latency_s, 3),
-        "cost_usd": result.cost_usd,
     }
 
     if result.note is None:
@@ -44,12 +43,12 @@ def process_transcript(transcript: str, llm: LLM) -> CareRecord:
     )
 
 
-def process_file(path: Path, llm: LLM, whisper_model: str | None = None) -> CareRecord:
+def process_file(path: Path, llm: LLM) -> CareRecord:
     path = Path(path)
     if path.suffix.lower() in AUDIO_SUFFIXES:
         from .stt import transcribe
 
-        stt = transcribe(path, model_size=whisper_model) if whisper_model else transcribe(path)
+        stt = transcribe(path)
         record = process_transcript(stt.text, llm)
         record.meta["stt_latency_s"] = round(stt.latency_s, 3)
         return record

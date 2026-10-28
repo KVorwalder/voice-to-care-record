@@ -44,20 +44,21 @@ removing any code we actually need.
 python -m venv .venv
 .venv/Scripts/activate            # Windows; source .venv/bin/activate elsewhere
 pip install -e ".[dev]"           # add ,stt,ui for Whisper and Streamlit
+ollama pull gemma3:12b            # free local default model (needs Ollama)
 ```
 
 ```bash
 care generate                                         # regenerate data/synthetic/cases.jsonl
-care process note.txt                                 # API model (default anthropic/claude-haiku-5-5)
-care process note.wav --local                         # Whisper + local Ollama model
+care process note.txt                                 # text note -> care record
+care process note.wav                                 # audio: local Whisper first
 care evaluate data/synthetic/cases.jsonl              # writes results/runs/<run>/ and results/summary.csv
-care evaluate data/synthetic/cases.jsonl --local --limit 10
+care evaluate data/synthetic/cases_test.jsonl --limit 10
 pytest
 ```
 
-Models are plain litellm strings: `--model openai/gpt-4o-mini`, `--model ollama_chat/qwen2.5:7b`, …
-Defaults can be set with `CARE_API_MODEL`, `CARE_LOCAL_MODEL`, `CARE_WHISPER_MODEL`.
-The API backend needs the provider key in the environment (e.g. `ANTHROPIC_API_KEY`).
+Models are plain litellm strings, so an API model works too: `--model anthropic/claude-haiku-5-5`
+(needs the provider key, e.g. `ANTHROPIC_API_KEY`). Defaults can be set with `CARE_MODEL` and
+`CARE_WHISPER_MODEL`.
 
 ## Synthetic data
 

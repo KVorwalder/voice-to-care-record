@@ -120,11 +120,8 @@ class SectionCounts:
 class CaseScore:
     sections: dict[str, SectionCounts] = field(default_factory=dict)
     hallucinated_paths: list[str] = field(default_factory=list)
-    hallucinations_flagged: int = 0
     expected_review: int = 0  # truth items that should be flagged...
     expected_review_flagged: int = 0  # ...and were matched + flagged
-    correct_unflagged_expected: int = 0  # correct items that needed no review
-    overflagged: int = 0  # ...but were flagged anyway
 
     def critical(self) -> SectionCounts:
         total = SectionCounts()
@@ -154,16 +151,13 @@ def score_case(pred: dict, truth: dict, expect_review: list[str], flagged_paths:
             exact = [i for i in candidates if value_matches(section, preds[i], t)]
             p_idx = (exact or candidates)[0]
             unused.discard(p_idx)
-            p_flagged = f"{section}[{p_idx}]" in flagged_paths
 
             if t_path in expect:
                 # For items humans must review anyway, finding + flagging is what counts.
                 counts.correct += 1
-                score.expected_review_flagged += p_flagged
+                score.expected_review_flagged += f"{section}[{p_idx}]" in flagged_paths
             elif exact:
                 counts.correct += 1
-                score.correct_unflagged_expected += 1
-                score.overflagged += p_flagged
             else:
                 counts.wrong_value += 1
 
@@ -172,10 +166,8 @@ def score_case(pred: dict, truth: dict, expect_review: list[str], flagged_paths:
                 counts.misplaced += 1
                 continue
             counts.hallucinated += 1
-            path = f"{section}[{p_idx}]"
             if section in CRITICAL_SECTIONS:
-                score.hallucinated_paths.append(path)
-                score.hallucinations_flagged += path in flagged_paths
+                score.hallucinated_paths.append(f"{section}[{p_idx}]")
 
         score.sections[section] = counts
     return score

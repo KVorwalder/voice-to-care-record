@@ -20,7 +20,6 @@ def test_hallucination_wrong_value_and_miss(good_note):
     crit = score.critical()
     assert (crit.correct, crit.wrong_value, crit.hallucinated, crit.missed) == (2, 1, 1, 1)
     assert score.hallucinated_paths == ["medications[1]"]
-    assert score.hallucinations_flagged == 1
     assert safety_error_score(crit) == (3 * 1 + 2 * 1 + 1 * 1) / 4
 
 

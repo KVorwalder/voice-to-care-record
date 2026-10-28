@@ -5,7 +5,6 @@ Nothing here changes extracted values: checks only add review flags. Guessing a
 """
 
 import re
-from difflib import SequenceMatcher
 
 from .numbers_de import numbers_in
 from .schema import SECTIONS, ExtractedNote, ReviewFlag, VitalKind, VitalSign
@@ -24,8 +23,6 @@ PLAUSIBLE_RANGES: dict[VitalKind, tuple[float, float]] = {
 }
 DIASTOLIC_RANGE = (30, 150)
 
-FUZZY_THRESHOLD = 0.85
-
 
 def normalize(text: str) -> str:
     text = text.lower().replace("’", "'")
@@ -33,22 +30,11 @@ def normalize(text: str) -> str:
     return " ".join(text.split())
 
 
-def grounding_score(evidence: str, transcript: str) -> float:
-    """1.0 if the evidence occurs verbatim (ignoring case/punctuation), else the best fuzzy
-    match against any transcript window of about the same length in words (±1 word, so a
-    single added or dropped word still matches)."""
-    ev, tr = normalize(evidence), normalize(transcript)
-    if not ev:
-        return 0.0
-    if ev in tr:
-        return 1.0
-    ev_words, tr_words = ev.split(), tr.split()
-    best = 0.0
-    for n in {max(1, len(ev_words) - 1), len(ev_words), len(ev_words) + 1}:
-        for i in range(max(1, len(tr_words) - n + 1)):
-            window = " ".join(tr_words[i : i + n])
-            best = max(best, SequenceMatcher(None, ev, window).ratio())
-    return best
+def is_grounded(evidence: str, transcript: str) -> bool:
+    """True if the evidence occurs verbatim in the transcript (ignoring case and punctuation).
+    Paraphrased quotes fail on purpose: a human then checks them."""
+    ev = normalize(evidence)
+    return bool(ev) and ev in normalize(transcript)
 
 
 def value_in_evidence(vital: VitalSign) -> bool:
@@ -79,10 +65,9 @@ def review(note: ExtractedNote, transcript: str) -> list[ReviewFlag]:
             if item.uncertain:
                 flags.append(ReviewFlag(path=path, reason="uncertain",
                                         detail="model marked this item as uncertain"))
-            score = grounding_score(item.evidence, transcript)
-            if score < FUZZY_THRESHOLD:
+            if not is_grounded(item.evidence, transcript):
                 flags.append(ReviewFlag(path=path, reason="ungrounded",
-                                        detail=f"evidence not found in transcript (match {score:.2f})"))
+                                        detail="evidence not found in transcript"))
             if isinstance(item, VitalSign):
                 if not value_in_evidence(item):
                     flags.append(ReviewFlag(path=path, reason="ungrounded",
