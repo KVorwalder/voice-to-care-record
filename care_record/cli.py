@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> None:
     Input:  argv - command line arguments (None = use sys.argv)
     Output: none
     """
-    if hasattr(sys.stdout, "reconfigure"):  # German umlauts on Windows consoles
+    if hasattr(sys.stdout, "reconfigure"):  # German umlaute on Windows consoles
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
 
