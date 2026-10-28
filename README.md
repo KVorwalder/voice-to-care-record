@@ -4,6 +4,11 @@ Caregivers in elderly care dictate a short voice note after a shift. This projec
 note into a **validated, structured care record (JSON)** and **flags anything uncertain for
 human review** instead of guessing.
 
+<img src="docs/app.png" alt="Streamlit app: a dictated note, the extracted record and one review flag" width="560">
+
+*Live test with my own voice: the model turned "Temperatur 3,8" into 38, and validation flagged
+it as `ungrounded`.*
+
 ```
 Audio ─► [1 STT: faster-whisper, local] ─► Transcript ─► [2 LLM extraction] ─► JSON
                                                                                 │
@@ -141,7 +146,8 @@ fewer metrics).
 - Drug names are not checked against a drug list: Whisper heard a synthetic voice's "Ramipril"
   as "M April", and the record contained a medication "M April" without a flag.
 - The summary has no evidence quote and is not validated, so it could state something that is
-  not in the note.
+  not in the note. In the screenshot it repeats the wrong temperature (38) and turns a
+  lunchtime visit ("Mittagsbesuch") into an afternoon visit.
 - Grounding is an exact text match, so a quote with a different filler word is flagged
   (debugging example 3).
 - Observation scoring only checks the SIS area, not the content of the text.
