@@ -6,8 +6,7 @@ human review** instead of guessing.
 
 <img src="docs/app.png" alt="Streamlit app: a dictated note, the extracted record and one review flag" width="560">
 
-*Live test with my own voice: the model turned "Temperatur 3,8" into 38, and validation flagged
-it as `ungrounded`.*
+*Live test with my own voice. I also made an intentional error by saing "temperature 3,6", to see how the model deals with it: the model turned "Temperatur 3,8" into 38, and validation flagged it as `ungrounded`.*
 
 ```
 Audio ─► [1 STT: faster-whisper, local] ─► Transcript ─► [2 LLM extraction] ─► JSON
