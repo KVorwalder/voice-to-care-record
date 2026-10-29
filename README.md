@@ -102,31 +102,21 @@ hallucination rate, since the area assignment is partly a judgement call.
 ## Results
 
 `gemma3:12b` via Ollama (local, free, temperature 0) on text transcripts, 45 notes per set, on an
-RTX 5070 Ti. Scores cover the critical sections (vital signs, medications, incidents). Every run
-is a row in [`results/summary.csv`](results/summary.csv).
+RTX 5070 Ti. Scores cover the critical sections (vital signs, medications, incidents). Both runs
+are rows in [`results/summary.csv`](results/summary.csv).
 
-| Version | Set | F1 | Halluc. | Wrong values | Missed | Safety error ↓ | Review recall | Valid JSON (1st try) | Time / note |
-|---|---|---|---|---|---|---|---|---|---|
-| Baseline prompt | dev | 0.926 | 0 | 4 | 9 | 0.144 | 6/12 | 96 % | 6.0 s |
-| Prompt fix | dev | 0.935 | 1 | 4 | 6 | 0.144 | 10/12 | 91 % | 6.1 s |
-| Final (simplified code) | dev | 0.918 | 0 | 5 | 8 | 0.160 | 8/12 | 89 % | 5.9 s |
-| Baseline prompt | test | 0.875 | 3 | 3 | 20 | 0.281 | 6/12 | 89 % | 6.2 s |
-| Prompt fix | test | 0.920 | 1 | 2 | 13 | 0.170 | 12/12 | 87 % | 6.3 s |
-| Final (simplified code) | test | 0.920 | 0 | 3 | 12 | 0.156 | 11/12 | 87 % | 6.1 s |
+| Set | F1 | Halluc. | Wrong values | Missed | Safety error ↓ | Review recall | Valid JSON (1st try) | Time / note |
+|---|---|---|---|---|---|---|---|---|
+| dev | 0.918 | 0 | 5 | 8 | 0.160 | 8/12 | 89 % | 5.9 s |
+| test | 0.920 | 0 | 3 | 12 | 0.156 | 11/12 | 87 % | 6.1 s |
 
-"Final" uses the same prompt as "Prompt fix", after the code was simplified (exact grounding,
-fewer metrics).
-
-- **The prompt fix is the one change that clearly helped:** contradictions are now flagged
-  (review recall 6/12 → 10–12/12), and on the test set the safety error dropped from 0.281 to
-  0.170. The test set was not used for tuning.
-- **Invented entries are rare** (0–1 per 45 notes after the fix). Most remaining errors are
-  missed items, especially incidents (incident F1 0.68–0.81, vital signs and medications 0.92–1.0).
-- **Invalid JSON is not lost:** notes that are still invalid after the retry (4–11 %) keep their
-  valid items, and the dropped ones are flagged.
+- **No invented entries** in either set. Most errors are missed items, especially incidents
+  (incident F1 0.78 dev / 0.70 test; vital signs and medications 0.92–1.0).
+- **Invalid JSON is not lost:** notes that are still invalid after the retry (7 % dev, 11 % test)
+  keep their valid items, and the dropped ones are flagged.
 - **Runs are noisy:** Ollama is not fully deterministic at temperature 0. About half of the notes
   differ between two runs with identical prompt and model, so differences of a few F1 points
-  (e.g. 0.935 vs. 0.918 on dev) are noise, not regressions.
+  between runs are noise.
 
 ## Limitations
 
