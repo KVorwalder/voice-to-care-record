@@ -9,11 +9,7 @@ human review** instead of guessing.
 *Live test with my own voice. I also made an intentional error by saing "temperature 3,6", to see how the model deals with it: the model turned "Temperatur 3,8" into 38, and validation flagged it as `ungrounded`.*
 
 ```
-Audio ─► [1 STT: faster-whisper, local] ─► Transcript ─► [2 LLM extraction] ─► JSON
-                                                                                │
-             CareRecord ◄── [3 validation: schema · retry · grounding · plausibility]
-                                                                                │
-                                              [4 evaluation harness vs. synthetic ground truth]
+Audio ─► [1 STT: faster-whisper, local] ─► Transcript ─► [2 LLM extraction] ─► JSON CareRecord ─► [3 validation] ─► [4 evaluation harness vs. synthetic ground truth]
 ```
 
 ## What it does
@@ -38,11 +34,6 @@ Informationssammlung, Strukturmodell): 1 kognitive und kommunikative Fähigkeite
 4 Selbstversorgung, 5 Leben in sozialen Beziehungen, 6 Wohnen/Häuslichkeit (stationär)
 bzw. Haushaltsführung (ambulant).
 
-### Why no LLM framework
-The pipeline is a single extraction call plus validation and one retry. Plain Python keeps
-every step visible and debuggable; a framework like LangChain would add abstraction without
-removing any code we actually need.
-
 ## How to run
 
 ```bash
@@ -53,13 +44,14 @@ ollama pull gemma3:12b            # free local default model (needs Ollama)
 ```
 
 ```bash
+streamlit run app.py                                  # To run the app (live test): dictate a note with the microphone
+
+# Additional functional calls
 care generate                                         # regenerate data/synthetic/cases.jsonl
 care process note.txt                                 # text note -> care record
 care process note.wav                                 # audio: local Whisper first
 care evaluate data/synthetic/cases.jsonl              # writes results/runs/<run>/ and results/summary.csv
 care evaluate data/synthetic/cases_test.jsonl --limit 10
-pytest
-streamlit run app.py                                  # live test: dictate a note with the microphone
 ```
 
 Whisper runs on the GPU if the CUDA libraries (cuBLAS, cuDNN) are installed, otherwise on the CPU
@@ -81,7 +73,7 @@ dev set used while changing the prompt, `cases_test.jsonl` (seed 1042) is only u
 |---|---|---|
 | standard | 16 | normal notes, mixed digits/words |
 | nothing_noteworthy | 4 | empty record must stay empty |
-| missing_value | 4 | "Blutdruck gemessen, Wert trag ich nach" → must **not** produce a value |
+| missing_value | 4 | "Blutdruck gemessen, Wert trag ich nach" → must not produce a value |
 | self_correction | 4 | "Puls 72, nee, Quatsch, 76" → 76 |
 | spoken_numbers | 4 | all numbers as German words |
 | refused_meds | 4 | medication status `refused` |
@@ -93,14 +85,14 @@ dev set used while changing the prompt, `cases_test.jsonl` (seed 1042) is only u
 
 Items are matched per section by entity (vital kind, drug name, incident type, SIS area):
 
-- **correct** – entity and value match
-- **wrong value** – entity found, value wrong (e.g. pulse 76 instead of 72)
+- **correct**: entity and value match
+- **wrong value**: entity found, value wrong (e.g. pulse 76 instead of 72)
 - **hallucination** – predicted entity that is not in the note
-- **misplaced** – predicted in the wrong section, e.g. "Luftnot" filed as an incident instead of an observation
-- **missed** – truth entity not predicted
+- **misplaced**: predicted in the wrong section, e.g. "Luftnot" filed as an incident instead of an observation
+- **missed**: truth entity not predicted
 
 Hallucinations are reported separately and weighted highest
-(`safety_error_score = (3·hallucinated + 2·wrong + 1·missed + 1·misplaced) / truth items`), because in care
+(`safety_error_score = (3 hallucinated + 2 wrong + 1 missed + 1 misplaced) / truth items`), because in care
 documentation an invented entry such as "Ramipril given" is worse than a missing one.
 For items the ground truth marks as needing review (hedged, contradictory, implausible), the
 system only has to find the entity and flag it; `review_recall` measures how often it does.
